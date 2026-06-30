@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Monitoring Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161d27; --panel-2:#1c2531; --line:#2a3441;
+    --text:#e7edf3; --muted:#8b9bab; --accent:#4fd1c5; --accent-soft:rgba(79,209,197,0.12);
+    --warn:#f2b84b; --bad:#f0625a; --good:#4fd17a; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+  #loginScreen{min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px;}
+  #loginScreen .box{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:32px; width:320px; display:flex; flex-direction:column; gap:12px;}
+  #loginScreen h1{margin:0 0 4px; font-size:18px;}
+  #loginScreen .sub{color:var(--muted); font-size:12px; margin-bottom:8px;}
+  #loginScreen input{background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:8px; font-size:13px; outline:none;}
+  #loginScreen input:focus{border-color:var(--accent);}
+  #loginScreen button{background:var(--accent); color:#0a1410; border:none; padding:10px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; margin-top:4px;}
+  #loginScreen button:hover{opacity:0.9;}
+  #loginError{color:var(--bad); font-size:12px; min-height:14px;}
+
+  header{padding:24px 32px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px;}
+  header h1{margin:0; font-size:22px; font-weight:600;}
+  header .sub{color:var(--muted); font-size:13px; margin-top:4px;}
+  .right-controls{display:flex; align-items:center; gap:10px;}
+  .status-pill{font-size:12px; padding:5px 12px; border-radius:20px; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);}
+  .status-pill.live{color:var(--good); border-color:rgba(79,209,122,0.35);}
+  .status-pill.err{color:var(--bad); border-color:rgba(240,98,90,0.35);}
+  .logout-btn{background:none; border:1px solid var(--line); color:var(--muted); padding:5px 12px; border-radius:8px; font-size:12px; cursor:pointer;}
+  .logout-btn:hover{color:var(--text); border-color:var(--text);}
+
+  .controls{display:flex; gap:10px; padding:18px 32px; flex-wrap:wrap; align-items:center;}
+  .controls input, .controls select{background:var(--panel); border:1px solid var(--line); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px; outline:none;}
+  .controls input{flex:1; min-width:200px;}
+  .controls input:focus, .controls select:focus{border-color:var(--accent);}
+  .btn{background:var(--accent-soft); color:var(--accent); border:1px solid rgba(79,209,197,0.35); padding:9px 16px; border-radius:8px; font-size:13px; cursor:pointer; font-weight:600;}
+  .btn:hover{background:rgba(79,209,197,0.2);}
+
+  .summary{display:flex; gap:14px; padding:0 32px 18px; flex-wrap:wrap;}
+  .summary .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 18px; min-width:130px;}
+  .summary .card .num{font-size:24px; font-weight:700;}
+  .summary .card .label{font-size:12px; color:var(--muted); margin-top:2px;}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; padding:0 32px 40px;}
+  .member-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px; display:flex; flex-direction:column; gap:10px;}
+  .member-card .top{display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .row{display:flex; flex-direction:column; gap:3px;}
+  .row .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px;}
+  .row textarea{background:var(--panel-2); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:8px; font-size:12px; font-family:inherit; resize:vertical; min-height:38px;}
+  .row textarea:focus{border-color:var(--accent); outline:none;}
+  .card-actions{display:flex; gap:8px; margin-top:4px;}
+  .card-actions button{flex:1; font-size:12px; padding:7px; border-radius:6px; cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--text);}
+  .card-actions .save{border-color:rgba(79,209,122,0.4); color:var(--good);}
+  .empty-state{padding:60px 32px; text-align:center; color:var(--muted);}
+  .empty-state b{color:var(--text);}
+  footer{padding:14px 32px; color:var(--muted); font-size:11px; border-top:1px solid var(--line);}
+  #app{display:none;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="box">
+    <h1>Team Monitoring Dashboard</h1>
+    <div class="sub">Sign in to view and edit</div>
+    <input id="loginEmail" type="email" placeholder="Email">
+    <input id="loginPassword" type="password" placeholder="Password">
+    <div id="loginError"></div>
+    <button id="loginBtn">Sign in</button>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div>
+      <h1>Team Monitoring Dashboard</h1>
+      <div class="sub">Live roster &amp; supplier assignments</div>
+    </div>
+    <div class="right-controls">
+      <span id="statusPill" class="status-pill">Connecting…</span>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <input id="searchInput" type="text" placeholder="Search by name or supplier...">
+    <select id="shiftFilter"><option value="">All shifts</option></select>
+    <button class="btn" id="addBtn">+ Add member</button>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+  <footer>Changes save straight to the database — visible to everyone with login access.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ============== CONFIG ==============
+   Fill these in from your Supabase project: Settings > API
+=========================================== */
+const SUPABASE_URL = "https://prxqfgdebbhwiaxpauax.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByeHFmZ2RlYmJod2lheHBhdWF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4NDMwODcsImV4cCI6MjA5ODQxOTA4N30.5GaaGQJdXwE6U1_tGwxtCC-1uf6RgOoil9Ql7Ml0sPA";
+/* ===================================== */
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let allRows = [];
+
+function setStatus(text, type){
+  const pill = document.getElementById('statusPill');
+  pill.textContent = text;
+  pill.className = 'status-pill' + (type ? ' ' + type : '');
+}
+function splitList(val){ return (val || '').split(';').map(s=>s.trim()).filter(Boolean); }
+
+async function checkSession(){
+  const { data: { session } } = await supabase.auth.getSession();
+  if(session){ showApp(); } else { showLogin(); }
+}
+function showLogin(){
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+function showApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadData();
+}
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if(error){ errEl.textContent = error.message; return; }
+  showApp();
+});
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  showLogin();
+});
+
+async function loadData(){
+  setStatus('Loading…');
+  const { data, error } = await supabase.from('members').select('*').order('name');
+  if(error){
+    setStatus('Connection error', 'err');
+    document.getElementById('grid').innerHTML = `<div class="empty-state"><b>Could not load data.</b><br>${error.message}</div>`;
+    return;
+  }
+  allRows = data;
+  setStatus('Live · updated ' + new Date().toLocaleTimeString(), 'live');
+  populateShiftFilter();
+  render();
+}
+
+function populateShiftFilter(){
+  const select = document.getElementById('shiftFilter');
+  const current = select.value;
+  const shifts = [...new Set(allRows.map(r => (r.shift || '').trim()).filter(Boolean))].sort();
+  select.innerHTML = '<option value="">All shifts</option>' + shifts.map(s => `<option value="${s}">${s}</option>`).join('');
+  select.value = current;
+}
+
+function render(){
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const shiftFilter = document.getElementById('shiftFilter').value;
+
+  const filtered = allRows.filter(r => {
+    const assigned = splitList(r.assigned_suppliers);
+    const monitored = splitList(r.monitored_suppliers);
+    const haystack = [r.name, ...assigned, ...monitored].join(' ').toLowerCase();
+    return (!q || haystack.includes(q)) && (!shiftFilter || (r.shift||'').trim() === shiftFilter);
+  });
+
+  const totalAssigned = filtered.reduce((s,r)=>s+splitList(r.assigned_suppliers).length,0);
+  const totalMonitored = filtered.reduce((s,r)=>s+splitList(r.monitored_suppliers).length,0);
+  document.getElementById('summary').innerHTML = `
+    <div class="card"><div class="num">${filtered.length}</div><div class="label">Members shown</div></div>
+    <div class="card"><div class="num">${totalAssigned}</div><div class="label">Suppliers assigned</div></div>
+    <div class="card"><div class="num">${totalMonitored}</div><div class="label">Suppliers monitored</div></div>
+  `;
+
+  const grid = document.getElementById('grid');
+  if(filtered.length === 0){
+    grid.innerHTML = '<div class="empty-state">No matches. Try a different search or shift filter, or add a member.</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(r => `
+    <div class="member-card" data-id="${r.id}">
+      <div class="top">
+        <input class="name-input" value="${r.name || ''}" style="background:transparent;border:none;color:var(--text);font-size:16px;font-weight:600;width:60%;outline:none;">
+        <input class="shift-input" value="${r.shift || ''}" placeholder="Shift" style="width:90px;text-align:center;font-size:11px;padding:4px 8px;border-radius:20px;background:var(--panel-2);color:var(--muted);border:1px solid var(--line);">
+      </div>
+      <div class="row">
+        <div class="k">Assigned suppliers (separate with ;)</div>
+        <textarea class="assigned-input">${r.assigned_suppliers || ''}</textarea>
+      </div>
+      <div class="row">
+        <div class="k">Monitored suppliers (separate with ;)</div>
+        <textarea class="monitored-input">${r.monitored_suppliers || ''}</textarea>
+      </div>
+      <div class="row">
+        <div class="k">Notes</div>
+        <textarea class="notes-input">${r.notes || ''}</textarea>
+      </div>
+      <div class="card-actions">
+        <button class="save-btn save">Save</button>
+        <button class="delete-btn">Delete</button>
+      </div>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.member-card').forEach(card => {
+    card.querySelector('.save-btn').addEventListener('click', () => saveMember(card));
+    card.querySelector('.delete-btn').addEventListener('click', () => deleteMember(card));
+  });
+}
+
+async function saveMember(card){
+  const id = card.dataset.id;
+  const payload = {
+    name: card.querySelector('.name-input').value.trim(),
+    shift: card.querySelector('.shift-input').value.trim(),
+    assigned_suppliers: card.querySelector('.assigned-input').value.trim(),
+    monitored_suppliers: card.querySelector('.monitored-input').value.trim(),
+    notes: card.querySelector('.notes-input').value.trim(),
+  };
+  const { error } = await supabase.from('members').update(payload).eq('id', id);
+  if(error){ alert('Save failed: ' + error.message); return; }
+  loadData();
+}
+
+async function deleteMember(card){
+  if(!confirm('Remove this member from the dashboard?')) return;
+  const id = card.dataset.id;
+  const { error } = await supabase.from('members').delete().eq('id', id);
+  if(error){ alert('Delete failed: ' + error.message); return; }
+  loadData();
+}
+
+document.getElementById('addBtn').addEventListener('click', async () => {
+  const { error } = await supabase.from('members').insert({ name: 'New member', shift: '', assigned_suppliers: '', monitored_suppliers: '', notes: '' });
+  if(error){ alert('Add failed: ' + error.message); return; }
+  loadData();
+});
+
+document.getElementById('searchInput').addEventListener('input', render);
+document.getElementById('shiftFilter').addEventListener('change', render);
+
+checkSession();
+</script>
+</body>
+</html>
