@@ -162,6 +162,7 @@
       <div class="sub">Shift monitoring · Cut-off alerts · Schedule</div>
     </div>
     <div class="right-controls">
+      <span id="notifStatus" onclick="requestNotifPermission()" style="font-size:11px;color:var(--muted);cursor:pointer;">🔕 Click to enable alerts</span>
       <span id="alarmStatus" style="font-size:11px;color:var(--muted);cursor:pointer;" onclick="testAlarm()">🔕 Click to enable alarm</span>
       <button onclick="testAlarm()" style="background:var(--bad-bg);color:var(--bad);border:1px solid rgba(220,38,38,0.35);padding:5px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;">🔔 Test Alarm</button>
       <button class="theme-btn" id="themeToggleApp">🌙 Dark mode</button>
@@ -355,6 +356,7 @@ async function loadAll(){
   if(e1||e2){setStatus('Connection error','err');return;}
   members=m||[];orders=o||[];
   checkAlarms();
+  sendCutoffsToSW();
   setStatus('Live · '+nowAU().toLocaleTimeString('en-AU',{timeZone:'Australia/Sydney'}),'live');
   updateDayBar();populateShiftFilter();render();
 }
@@ -617,14 +619,54 @@ function checkAlarms(){
     }
     if(status !== 'bad') firedAlerts.delete(alertKey);
   });
+  // Keep SW in sync
+  sendCutoffsToSW();
 }
 
-// Request notification permission
-if('Notification' in window && Notification.permission === 'default'){
-  Notification.requestPermission();
+// ---- SERVICE WORKER REGISTRATION ----
+let swRegistration = null;
+
+async function registerSW(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    swRegistration = await navigator.serviceWorker.register('./sw.js');
+    console.log('SW registered');
+  } catch(e){ console.warn('SW failed:', e); }
 }
+
+function sendCutoffsToSW(){
+  if(!swRegistration || !swRegistration.active) return;
+  const data = orders.filter(o => o.cutoff_time).map(o => {
+    const member = members.find(m => m.id === o.member_id);
+    return {
+      memberId: o.member_id,
+      memberName: member ? member.name : 'Unknown',
+      supplierName: o.supplier_name,
+      cutoffTime: o.cutoff_time
+    };
+  });
+  swRegistration.active.postMessage({ type:'UPDATE_CUTOFFS', data });
+}
+
+// Request notification permission with a prompt
+async function requestNotifPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default'){
+    const perm = await Notification.requestPermission();
+    if(perm === 'granted'){
+      document.getElementById('notifStatus').textContent = '🔔 Notifications: ON';
+      document.getElementById('notifStatus').style.color = 'var(--good)';
+    }
+  } else if(Notification.permission === 'granted'){
+    document.getElementById('notifStatus').textContent = '🔔 Notifications: ON';
+    document.getElementById('notifStatus').style.color = 'var(--good)';
+  }
+}
+
 // Unlock audio on ANY click
 document.addEventListener('click', unlockAudio);
+registerSW();
+requestNotifPermission();
 
 checkSession();
 setInterval(()=>{updateDayBar();render();checkAlarms();},30000);
