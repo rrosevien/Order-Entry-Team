@@ -134,7 +134,8 @@
 
   @keyframes flashAlert{0%,100%{opacity:1;}50%{opacity:0.3;}}
   @keyframes flashCard{0%,100%{box-shadow:none;}50%{box-shadow:0 0 18px 4px rgba(220,38,38,0.5);}}
-  .supplier-row.bad{ animation:flashAlert 1.2s ease-in-out infinite; }
+  .supplier-row.bad{ animation:flashAlert 1.2s ease-in-out infinite; border-color:rgba(220,38,38,0.5);background:var(--bad-bg); }
+  .supplier-row.passed{ border-color:rgba(220,38,38,0.3);background:var(--bad-bg); opacity:0.7; }
   .member-card.has-alert{ animation:flashCard 1.2s ease-in-out infinite; }
   .empty-state{padding:60px 28px;text-align:center;color:var(--muted);grid-column:1/-1;}
   footer{padding:12px 28px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);}
@@ -399,7 +400,7 @@ function getCutoffStatus(cutoffTime){
   const[h,m]=cutoffTime.split(':').map(Number);
   const cutoff=nowAU();cutoff.setHours(h,m,0,0);
   const diff=(cutoff-now)/60000;
-  if(diff<0)return{status:'bad',label:'Passed!',icon:'🔴'};
+  if(diff<0)return{status:'passed',label:'Passed!',icon:'🔴'};
   if(diff<=30)return{status:'bad',label:`${Math.round(diff)}min left`,icon:'🔴'};
   if(diff<=60)return{status:'warn',label:`${Math.round(diff)}min left`,icon:'🟡'};
   const hrs=Math.floor(diff/60),mins=Math.round(diff%60);
@@ -457,7 +458,7 @@ function render(){
       const row=orders.find(o=>o.member_id===member.id&&o.supplier_name===sup);
       const cutoff=row?(row.cutoff_time||''):'';
       const{status,label,icon}=getCutoffStatus(cutoff);
-      return`<div class="supplier-row ${status==='none'?'':status}">
+      return`<div class="supplier-row ${status==='none'?'':status==='passed'?'passed':status}">
         <div>
           <div class="sup-name">${sup}</div>
           <div class="cutoff-row"><span class="cutoff-label">Cut-off:</span>
@@ -476,7 +477,7 @@ function render(){
 
     const hasBadCutoff = suppliers.some(sup => {
       const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
-      return row && getCutoffStatus(row.cutoff_time).status === 'bad';
+      const s = getCutoffStatus(row?.cutoff_time||'').status; return s === 'bad';
     });
     return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">
       <div class="card-header">
@@ -520,7 +521,7 @@ function renderRoster(filtered,todayName,grid){
     }).join('');
     const hasBadCutoff = suppliers.some(sup => {
       const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
-      return row && getCutoffStatus(row.cutoff_time).status === 'bad';
+      const s = getCutoffStatus(row?.cutoff_time||'').status; return s === 'bad';
     });
     return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">
       <div class="card-header">
@@ -597,7 +598,7 @@ function checkAlarms(){
     if(!o.cutoff_time) return;
     const { status } = getCutoffStatus(o.cutoff_time);
     const alertKey = `${o.id}-${o.cutoff_time}`;
-    if(status === 'bad' && !firedAlerts.has(alertKey)){
+    if((status === 'bad') && !firedAlerts.has(alertKey)){
       firedAlerts.add(alertKey);
       playAlarm();
       // Flash body
@@ -617,7 +618,7 @@ function checkAlarms(){
         });
       }
     }
-    if(status !== 'bad') firedAlerts.delete(alertKey);
+    if(status !== 'bad' && status !== 'passed') firedAlerts.delete(alertKey);
   });
   // Keep SW in sync
   sendCutoffsToSW();
