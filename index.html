@@ -347,7 +347,7 @@ async function loadAll(){
   ]);
   if(e1||e2){setStatus('Connection error','err');return;}
   members=m||[];orders=o||[];
-  setStatus('Live · '+new Date().toLocaleTimeString(),'live');
+  setStatus('Live · '+nowAU().toLocaleTimeString('en-AU',{timeZone:'Australia/Sydney'}),'live');
   updateDayBar();populateShiftFilter();render();
 }
 
@@ -359,12 +359,15 @@ async function ensureOrderRows(memberId,suppliers){
 }
 
 /* ======= DAY BAR ======= */
+function nowAU(){ return new Date(new Date().toLocaleString('en-US',{timeZone:'Australia/Sydney'})); }
 function updateDayBar(){
-  const now=new Date();
+  const now=nowAU();
   const todayIdx=now.getDay();
   const todayName=DAYS[todayIdx];
-  document.getElementById('todayLabel').textContent=`${todayName}, ${now.toLocaleDateString('en-AU',{day:'numeric',month:'long',year:'numeric'})}`;
-  document.getElementById('dateLabel').textContent='Shift monitoring for today';
+  const auTimeStr=new Date().toLocaleTimeString('en-AU',{timeZone:'Australia/Sydney',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const auDateStr=new Date().toLocaleDateString('en-AU',{timeZone:'Australia/Sydney',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('todayLabel').textContent=`${todayName}, ${auDateStr}`;
+  document.getElementById('dateLabel').textContent=`🇦🇺 AU Sydney Time: ${auTimeStr} — all cut-off times based on AU time`;
 
   const onShift=Object.entries(ROSTER).filter(([n,d])=>d.schedule[todayName]&&d.schedule[todayName]!=='OFF').length;
   const offToday=Object.entries(ROSTER).filter(([n,d])=>!d.schedule[todayName]||d.schedule[todayName]==='OFF').length;
@@ -382,9 +385,9 @@ function updateDayBar(){
 /* ======= CUT-OFF ======= */
 function getCutoffStatus(cutoffTime){
   if(!cutoffTime)return{status:'none',label:'Set cut-off',icon:'⚪'};
-  const now=new Date();
+  const now=nowAU();
   const[h,m]=cutoffTime.split(':').map(Number);
-  const cutoff=new Date();cutoff.setHours(h,m,0,0);
+  const cutoff=nowAU();cutoff.setHours(h,m,0,0);
   const diff=(cutoff-now)/60000;
   if(diff<0)return{status:'bad',label:'Passed!',icon:'🔴'};
   if(diff<=30)return{status:'bad',label:`${Math.round(diff)}min left`,icon:'🔴'};
@@ -410,7 +413,7 @@ document.querySelectorAll('.tab').forEach(t=>{
 function render(){
   const q=document.getElementById('searchInput').value.toLowerCase();
   const sf=document.getElementById('shiftFilter').value;
-  const todayName=DAYS[new Date().getDay()];
+  const todayName=DAYS[nowAU().getDay()];
 
   let filtered=members.filter(m=>{
     const hay=[m.name,m.assigned_suppliers].join(' ').toLowerCase();
