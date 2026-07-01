@@ -131,6 +131,11 @@
   .off-chip .off-shift{font-size:11px;color:var(--muted);}
   .off-badge{background:var(--off-bg);color:var(--off);border:1px solid rgba(107,126,147,0.3);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
 
+
+  @keyframes flashAlert{0%,100%{opacity:1;}50%{opacity:0.3;}}
+  @keyframes flashCard{0%,100%{box-shadow:none;}50%{box-shadow:0 0 18px 4px rgba(220,38,38,0.5);}}
+  .supplier-row.bad{ animation:flashAlert 1.2s ease-in-out infinite; }
+  .member-card.has-alert{ animation:flashCard 1.2s ease-in-out infinite; }
   .empty-state{padding:60px 28px;text-align:center;color:var(--muted);grid-column:1/-1;}
   footer{padding:12px 28px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);}
   #app{display:none;}
@@ -347,6 +352,7 @@ async function loadAll(){
   ]);
   if(e1||e2){setStatus('Connection error','err');return;}
   members=m||[];orders=o||[];
+  checkAlarms();
   setStatus('Live · '+nowAU().toLocaleTimeString('en-AU',{timeZone:'Australia/Sydney'}),'live');
   updateDayBar();populateShiftFilter();render();
 }
@@ -464,7 +470,11 @@ function render(){
         <span class="task-name">${tk.s}</span>
       </div>`).join(''):'<div style="color:var(--muted);font-size:12px">No breakdown for today</div>';
 
-    return`<div class="member-card" data-id="${member.id}">
+    const hasBadCutoff = suppliers.some(sup => {
+      const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
+      return row && getCutoffStatus(row.cutoff_time).status === 'bad';
+    });
+    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">`
       <div class="card-header">
         <div>
           <div class="name">${member.name}</div>
@@ -504,7 +514,11 @@ function renderRoster(filtered,todayName,grid){
         <div class="day-shift">${isOff?'OFF':shift}</div>
       </div>`;
     }).join('');
-    return`<div class="member-card" data-id="${member.id}">
+    const hasBadCutoff = suppliers.some(sup => {
+      const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
+      return row && getCutoffStatus(row.cutoff_time).status === 'bad';
+    });
+    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">`
       <div class="card-header">
         <div><div class="name">${member.name}</div>${roster.role?`<div class="role">${roster.role}</div>`:''}</div>
         <div class="${roster.schedule[todayName]&&roster.schedule[todayName]!=='OFF'?'shift-chip on-shift':'shift-chip off-today'}">${roster.schedule[todayName]&&roster.schedule[todayName]!=='OFF'?'✅ On':'😴 Off'}</div>
@@ -529,8 +543,69 @@ document.getElementById('addBtn').onclick=async()=>{await sb.from('members').ins
 document.getElementById('searchInput').addEventListener('input',render);
 document.getElementById('shiftFilter').addEventListener('change',render);
 
+
+/* ======= ALARM SYSTEM ======= */
+let firedAlerts = new Set();
+let audioCtx = null;
+
+function getAudioCtx(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playAlarm(){
+  try {
+    const ctx = getAudioCtx();
+    const beepTimes = [0, 0.35, 0.7];
+    beepTimes.forEach(offset => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + offset);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + offset + 0.15);
+      gain.gain.setValueAtTime(0.6, ctx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.3);
+      osc.start(ctx.currentTime + offset);
+      osc.stop(ctx.currentTime + offset + 0.3);
+    });
+  } catch(e){ console.warn('Audio error:', e); }
+}
+
+function checkAlarms(){
+  if(!orders.length) return;
+  orders.forEach(o => {
+    if(!o.cutoff_time) return;
+    const { status } = getCutoffStatus(o.cutoff_time);
+    const alertKey = `${o.member_id}-${o.supplier_name}-${o.cutoff_time}`;
+    if(status === 'bad' && !firedAlerts.has(alertKey)){
+      firedAlerts.add(alertKey);
+      playAlarm();
+      // Also show browser notification if permitted
+      if(Notification.permission === 'granted'){
+        const member = members.find(m => m.id === o.member_id);
+        const name = member ? member.name : 'Someone';
+        new Notification('⚠️ Cut-off Alert!', {
+          body: `${name} — ${o.supplier_name} cut-off in 30 mins or less!`,
+          icon: ''
+        });
+      }
+    }
+    // Reset fired alert if cut-off passes (so next day it fires again)
+    if(status !== 'bad') firedAlerts.delete(alertKey);
+  });
+}
+
+// Request notification permission on load
+if('Notification' in window && Notification.permission === 'default'){
+  Notification.requestPermission();
+}
+
+// Unlock audio on first user interaction
+document.addEventListener('click', () => { try{ getAudioCtx(); }catch(e){} }, { once: true });
+
 checkSession();
-setInterval(()=>{updateDayBar();render();},60000);
+setInterval(()=>{updateDayBar();render();checkAlarms();},60000);
 </script>
 </body>
 </html>
