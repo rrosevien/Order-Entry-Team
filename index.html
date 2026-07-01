@@ -162,6 +162,8 @@
       <div class="sub">Shift monitoring · Cut-off alerts · Schedule</div>
     </div>
     <div class="right-controls">
+      <span id="alarmStatus" style="font-size:11px;color:var(--muted);cursor:pointer;" onclick="testAlarm()">🔕 Click to enable alarm</span>
+      <button onclick="testAlarm()" style="background:var(--bad-bg);color:var(--bad);border:1px solid rgba(220,38,38,0.35);padding:5px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;">🔔 Test Alarm</button>
       <button class="theme-btn" id="themeToggleApp">🌙 Dark mode</button>
       <span id="statusPill" class="pill">Connecting…</span>
       <button class="icon-btn" id="logoutBtn">Sign out</button>
@@ -547,29 +549,44 @@ document.getElementById('shiftFilter').addEventListener('change',render);
 /* ======= ALARM SYSTEM ======= */
 let firedAlerts = new Set();
 let audioCtx = null;
+let alarmUnlocked = false;
 
-function getAudioCtx(){
-  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  return audioCtx;
+function unlockAudio(){
+  if(alarmUnlocked) return;
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    alarmUnlocked = true;
+    document.getElementById('alarmStatus').textContent = '🔔 Alarm: ON';
+    document.getElementById('alarmStatus').style.color = 'var(--good)';
+  } catch(e){ console.warn('Audio unlock failed:', e); }
 }
 
 function playAlarm(){
-  try {
-    const ctx = getAudioCtx();
-    const beepTimes = [0, 0.35, 0.7];
-    beepTimes.forEach(offset => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime + offset);
-      osc.frequency.setValueAtTime(660, ctx.currentTime + offset + 0.15);
-      gain.gain.setValueAtTime(0.6, ctx.currentTime + offset);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.3);
-      osc.start(ctx.currentTime + offset);
-      osc.stop(ctx.currentTime + offset + 0.3);
+  try{
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const beeps = [0, 0.4, 0.8, 1.2, 1.6];
+    beeps.forEach(offset => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + offset);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + offset + 0.25);
+      osc.start(audioCtx.currentTime + offset);
+      osc.stop(audioCtx.currentTime + offset + 0.25);
     });
-  } catch(e){ console.warn('Audio error:', e); }
+  } catch(e){ console.warn('Alarm error:', e); }
+}
+
+function testAlarm(){
+  unlockAudio();
+  playAlarm();
+  // Flash body briefly
+  document.body.style.outline = '6px solid red';
+  setTimeout(() => document.body.style.outline = '', 800);
 }
 
 function checkAlarms(){
@@ -577,35 +594,40 @@ function checkAlarms(){
   orders.forEach(o => {
     if(!o.cutoff_time) return;
     const { status } = getCutoffStatus(o.cutoff_time);
-    const alertKey = `${o.member_id}-${o.supplier_name}-${o.cutoff_time}`;
+    const alertKey = `${o.id}-${o.cutoff_time}`;
     if(status === 'bad' && !firedAlerts.has(alertKey)){
       firedAlerts.add(alertKey);
       playAlarm();
-      // Also show browser notification if permitted
+      // Flash body
+      let flashes = 0;
+      const flashInterval = setInterval(() => {
+        document.body.style.outline = flashes % 2 === 0 ? '6px solid red' : 'none';
+        flashes++;
+        if(flashes > 10) { clearInterval(flashInterval); document.body.style.outline = 'none'; }
+      }, 300);
+      // Browser notification
       if(Notification.permission === 'granted'){
         const member = members.find(m => m.id === o.member_id);
         const name = member ? member.name : 'Someone';
         new Notification('⚠️ Cut-off Alert!', {
-          body: `${name} — ${o.supplier_name} cut-off in 30 mins or less!`,
-          icon: ''
+          body: name + ' — ' + o.supplier_name + ' cut-off in 30 mins or less!',
+          requireInteraction: true
         });
       }
     }
-    // Reset fired alert if cut-off passes (so next day it fires again)
     if(status !== 'bad') firedAlerts.delete(alertKey);
   });
 }
 
-// Request notification permission on load
+// Request notification permission
 if('Notification' in window && Notification.permission === 'default'){
   Notification.requestPermission();
 }
-
-// Unlock audio on first user interaction
-document.addEventListener('click', () => { try{ getAudioCtx(); }catch(e){} }, { once: true });
+// Unlock audio on ANY click
+document.addEventListener('click', unlockAudio);
 
 checkSession();
-setInterval(()=>{updateDayBar();render();checkAlarms();},60000);
+setInterval(()=>{updateDayBar();render();checkAlarms();},30000);
 </script>
 </body>
 </html>
