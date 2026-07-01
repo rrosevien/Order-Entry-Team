@@ -476,7 +476,7 @@ function render(){
       const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
       return row && getCutoffStatus(row.cutoff_time).status === 'bad';
     });
-    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">`
+    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">
       <div class="card-header">
         <div>
           <div class="name">${member.name}</div>
@@ -520,7 +520,7 @@ function renderRoster(filtered,todayName,grid){
       const row = orders.find(o => o.member_id === member.id && o.supplier_name === sup);
       return row && getCutoffStatus(row.cutoff_time).status === 'bad';
     });
-    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">`
+    return`<div class="member-card ${hasBadCutoff ? 'has-alert' : ''}" data-id="${member.id}">
       <div class="card-header">
         <div><div class="name">${member.name}</div>${roster.role?`<div class="role">${roster.role}</div>`:''}</div>
         <div class="${roster.schedule[todayName]&&roster.schedule[todayName]!=='OFF'?'shift-chip on-shift':'shift-chip off-today'}">${roster.schedule[todayName]&&roster.schedule[todayName]!=='OFF'?'✅ On':'😴 Off'}</div>
